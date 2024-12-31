@@ -25,7 +25,7 @@ with torch.cuda.amp.autocast():  # Enable automatic mixed precision
     output = pipe(
         image, 
         num_frames=14,  # Reduce number of frames if needed
-        num_inference_steps=75,  # Reduce number of inference steps
+        num_inference_steps=150,  # Reduce number of inference steps
         height=512,  # Reduce height if needed
         width=512,  # Reduce width if needed
     ).frames  # This is a list of PIL Images
