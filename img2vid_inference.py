@@ -8,7 +8,7 @@ pipe = StableVideoDiffusionPipeline.from_pretrained(
     "stabilityai/stable-video-diffusion-img2vid", 
     torch_dtype=torch.float16,  # Use float16 to save memory
     variant="fp16"
-) 
+)   
 
 # Move to GPU if available
 device = "cuda" if torch.cuda.is_available() else "cpu"
