@@ -3,11 +3,13 @@ from PIL import Image
 import torch
 import os
 
+# Seed
+torch.manual_seed(42)
+
 # Load the pipeline
 pipe = StableVideoDiffusionPipeline.from_pretrained(
     "stabilityai/stable-video-diffusion-img2vid", 
-    torch_dtype=torch.float16,  # Use float16 to save memory
-    variant="fp16"
+    torch_dtype=torch.float16
 )    
 
 # Move to GPU if available
@@ -19,35 +21,32 @@ pipe.enable_model_cpu_offload()
 
 # Open the image
 image = Image.open("1.jpg").convert("RGB")
-
 # Generate the video with reduced memory usage
-with torch.cuda.amp.autocast():  # Enable automatic mixed precision
+with torch.amp.autocast('cuda'):  # Enable automatic mixed precision
     output = pipe(
         image, 
         num_frames=14,  # Reduce number of frames if needed
-        num_inference_steps=150,  # Reduce number of inference steps
-        height=512,  # Reduce height if needed
-        width=512,  # Reduce width if needed
-    ).frames  # This is a list of PIL Images
+        num_inference_steps=75,  # Reduce number of inference steps
+        height=720,  # Reduce height if needed
+        width=720,  # Reduce width if needed
+    ).frames
+for i, frame in enumerate(output[0]):
+    frame.save(f"frames14/frame_{i:03d}.png")
+os.system(f"ffmpeg -framerate 14 -i frames14/frame_%03d.png output_test.gif")
 
-print("Video generated successfully")
 
-print(output)
 # # Save the output frames as a gif
 # output[0][0].save("output.gif", save_all=True, append_images=output[1:], duration=1000, loop=0)
 
 # Create a directory to store individual frames
-os.makedirs("frames", exist_ok=True)
 
 # Save individual frames
-for i, frame in enumerate(output[0]):
-    frame.save(f"frames/frame_{i:03d}.png")
 
 # print("Individual frames saved")
 
 # # Use FFmpeg to combine frames into a GIF
 # # Make sure FFmpeg is installed on your system
-# os.system("ffmpeg -framerate 10 -i frames/frame_%03d.png output.gif")
+# os.system("ffmpeg -framerate 24 -i frames/frame_%03d.png output.gif")
 
 # print("Video saved as output.gif")
 
@@ -63,4 +62,4 @@ for i, frame in enumerate(output[0]):
 # Clear CUDA cache
 torch.cuda.empty_cache()
 
-print("Process completed")
+# print("Process completed")
