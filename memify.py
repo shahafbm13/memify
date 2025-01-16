@@ -27,17 +27,17 @@ def meme_text_generator(user_prompt: str):
     messages = [
     {"role": "user", "content": 
         f"""**Instruction:**
-                You are a creative and witty AI. Please write a short, meme-like text about the subject "{user_prompt}".
-                Keep it concise—one or two sentences only—and make it humorous or engaging in the style of an internet meme.
+                You are a creative and witty AI. Please write a short, meme-like one-liner about the subject "{user_prompt}".
+                Keep it concise—one or two short sentences only—and make it humorous or engaging in the style of an internet meme.
 
             **Goal:**
-                Produce a fun, meme-like quip referencing "{user_prompt}".
-                Keep it short and suitable for a wide audience.
-                You may include mild pop-culture references or comedic exaggeration.
+                Produce a fun, meme-like phrase referencing "{user_prompt}".
+                Keep it short and funny.
+                You may include pop-culture references or comedic exaggeration.
 
             **Format:**
-                One or two sentences maximum.
-                Meme-like or playful tone.
+                One or two short sentences maximum.
+                Meme-like.
 
             Begin now.
             """
@@ -68,7 +68,7 @@ def gif_generator(meme_template_path: str, index : int):
         output = img2vid(
             image, 
             num_frames=14,  # Reduce number of frames if needed
-            num_inference_steps=100,  # Reduce number of inference steps
+            num_inference_steps=150,  # Reduce number of inference steps
             height=512,  # Reduce height if needed
             width=512,  # Reduce width if needed            
         ).frames
@@ -89,28 +89,12 @@ def gif_generator(meme_template_path: str, index : int):
 
 def text_on_gif(gif_path: str, meme_text: str):
     font_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/Avita-Black.otf"
-
-    # Load the GIF to get its dimensions
-    with Image.open(gif_path) as gif:
-        image_size = gif.size
-
-    # Calculate font size and positions
-    font_size, first_text_position, second_text_position, first_text, second_text = calculate_text_split_and_position(
-        meme_text, image_size, font_path, max_font_size=30, margin=20
-    )
-
     # Pass the calculated parameters to the GIF function
     add_clear_text_with_outline_to_gif(
         input_gif=gif_path,
         output_gif=gif_path,
-        text=f"{first_text},{second_text}",
+        text=meme_text,
         font_path=font_path,
-        font_size=font_size,
-        first_text_position=first_text_position,
-        second_text_position=second_text_position,
-        outline_color=(0, 0, 0),
-        text_color=(255, 255, 255),
-        outline_thickness=2
     )
 
     

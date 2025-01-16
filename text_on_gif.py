@@ -1,154 +1,182 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
-import math
+from textwrap import wrap
 
-def split_text_into_two_lines(text):
+def split_text_for_top_and_bottom(text):
     """
-    Splits the text into two lines between words, aiming for a balanced split.
+    Splits the text into two parts for the top and bottom of the image.
+    Tries to split at a logical breakpoint near the middle.
 
     Parameters:
-    - text: The input text to split.
+    - text: The full text to split.
 
     Returns:
-    - A tuple: (first_text, second_text)
+    - A tuple: (top_text, bottom_text)
     """
     words = text.split()
-    mid_index = math.ceil(len(words) / 2)
+    mid_index = len(words) // 2
 
-    # Adjust mid_index to ensure the split occurs at a word boundary
-    first_text = " ".join(words[:mid_index]).strip()
-    second_text = " ".join(words[mid_index:]).strip()
+    # Split at the middle word
+    top_text = " ".join(words[:mid_index]).strip()
+    bottom_text = " ".join(words[mid_index:]).strip()
 
-    return first_text, second_text
+    return top_text, bottom_text
 
-def split_meme_text(text):
-    # Try splitting by a delimiter like a comma first
-    if ',' in text:
-        upper_text, lower_text = text.split(',', 1)
-    # If no comma, split by the first space roughly in the middle
-    else:
-        words = text.split()
-        mid_index = len(words) // 2
-        upper_text = ' '.join(words[:mid_index])
-        lower_text = ' '.join(words[mid_index:])
-
-    # Trim leading/trailing spaces
-    return upper_text.strip(), lower_text.strip()
-
-
-def calculate_text_split_and_position(
-    text, 
-    image_size, 
-    font_path, 
-    max_font_size=100, 
-    margin=20
-):
+def split_text_into_lines(text, font, max_width):
     """
-    Splits the text into two lines, calculates positions, and an appropriate font size
-    for the given image size.
+    Splits the text into multiple lines to fit within the specified width.
 
     Parameters:
-    - text: The text to be split and positioned.
+    - text: The text to split.
+    - font: The font object used to measure text size.
+    - max_width: The maximum allowable width for a line.
+
+    Returns:
+    - A list of text lines.
+    """
+    words = text.split()
+    lines = []
+    current_line = []
+
+    for word in words:
+        # Check if adding the word exceeds the width
+        test_line = " ".join(current_line + [word])
+        if font.getbbox(test_line)[2] <= max_width:
+            current_line.append(word)
+        else:
+            # Current line is complete, add to lines and start a new line
+            lines.append(" ".join(current_line))
+            current_line = [word]
+
+    # Add the last line if it exists
+    if current_line:
+        lines.append(" ".join(current_line))
+
+    return lines
+
+def calculate_text_positions_and_font_size(
+    text, image_size, font_path, max_font_size=100, margin=20, position="top"
+):
+    """
+    Adjust font size and calculate positions for multiple lines of text.
+
+    Parameters:
+    - text: The input text to fit within the image.
     - image_size: Tuple (width, height) of the image.
     - font_path: Path to the font file.
     - max_font_size: Maximum allowable font size.
     - margin: Minimum distance from the edges of the image.
+    - position: Either "top" or "bottom" for text placement.
 
     Returns:
-    - A tuple: (font_size, first_text_position, second_text_position, first_text, second_text)
+    - font_size, positions (list of (x, y)), lines (list of text lines).
     """
     width, height = image_size
 
-    # Split the text into two lines
-    first_text, second_text = split_text_into_two_lines(text)
-
-    # Determine the maximum font size that fits within the image width
+    # Find the largest font size that works
     font_size = max_font_size
-    while font_size > 10:  # Minimum font size threshold
+    while font_size > 10:
         font = ImageFont.truetype(font_path, font_size)
-        first_text_bbox = font.getbbox(first_text)
-        second_text_bbox = font.getbbox(second_text)
+        max_line_width = width - 2 * margin
+        lines = split_text_into_lines(text, font, max_line_width)
 
-        first_text_width = first_text_bbox[2] - first_text_bbox[0]
-        second_text_width = second_text_bbox[2] - second_text_bbox[0]
+        # Total height of text block
+        total_text_height = sum(
+            [font.getbbox(line)[3] - font.getbbox(line)[1] for line in lines]
+        ) + (len(lines) - 1) * margin
 
-        if first_text_width <= width - 2 * margin and second_text_width <= width - 2 * margin:
+        if total_text_height <= height / 2 - margin:  # Ensure it fits within half the image
             break
         font_size -= 1
 
     if font_size == 10:
-        raise ValueError("Text too large to fit in the image even with the smallest font size.")
+        raise ValueError("Text is too large to fit the image.")
 
-    # Calculate positions
-    font = ImageFont.truetype(font_path, font_size)
-    first_text_bbox = font.getbbox(first_text)
-    second_text_bbox = font.getbbox(second_text)
+    # Calculate positions for each line
+    positions = []
+    if position == "top":
+        y_offset = margin  # Start at the top margin
+    elif position == "bottom":
+        y_offset = height - total_text_height - 2 * margin  # Start above the bottom margin
+    else:
+        raise ValueError("Invalid position. Use 'top' or 'bottom'.")
 
-    first_text_width = first_text_bbox[2] - first_text_bbox[0]
-    first_text_height = first_text_bbox[3] - first_text_bbox[1]
+    for line in lines:
+        line_width = font.getbbox(line)[2] - font.getbbox(line)[0]
+        x_position = (width - line_width) // 2  # Center text horizontally
+        positions.append((x_position, y_offset))
+        y_offset += font.getbbox(line)[3] - font.getbbox(line)[1] + margin
 
-    second_text_width = second_text_bbox[2] - second_text_bbox[0]
-    second_text_height = second_text_bbox[3] - second_text_bbox[1]
+    return font_size, positions, lines
 
-    first_text_position = ((width - first_text_width) // 2, margin)
-    second_text_position = ((width - second_text_width) // 2, height - second_text_height - margin)
-
-    return font_size, first_text_position, second_text_position, first_text, second_text
-
+def draw_text_with_outline(draw, position, text, font, outline_color, text_color, thickness):
+    x, y = position
+    # Draw outline
+    for dx in range(-thickness, thickness + 1):
+        for dy in range(-thickness, thickness + 1):
+            if dx != 0 or dy != 0:  # Avoid overwriting the main text
+                draw.text((x + dx, y + dy), text, font=font, fill=outline_color)
+    # Draw main text
+    draw.text(position, text, font=font, fill=text_color)
 
 def add_clear_text_with_outline_to_gif(
     input_gif,
     output_gif,
     text,
     font_path,
-    font_size,
-    first_text_position,
-    second_text_position,
-    outline_color=(255, 255, 255),  # White outline
-    text_color=(0, 0, 0),  # Black text
-    outline_thickness=2  # Thickness of the outline
+    outline_color=(0, 0, 0),
+    text_color=(255, 255, 255),
+    outline_thickness=1,
+    max_font_size=30,
+    margin=2,
 ):
-    # Ensure the font file exists
-    if not os.path.exists(font_path):
-        raise FileNotFoundError(f"Font file '{font_path}' not found.")
-    
-    # Load the GIF
-    try:
-        img = Image.open(input_gif)
-    except Exception as e:
-        raise IOError(f"Failed to open input GIF: {e}")
-    
+    # Split the text into top and bottom parts dynamically
+    top_text, bottom_text = split_text_for_top_and_bottom(text)
+
+    # Load GIF
+    img = Image.open(input_gif)
     frames = []
 
-    def draw_text_with_outline(draw, position, text, font, outline_color, text_color, thickness):
-        x, y = position
-        # Draw outline
-        for dx in range(-thickness, thickness + 1):
-            for dy in range(-thickness, thickness + 1):
-                if dx != 0 or dy != 0:  # Avoid drawing over the text itself
-                    draw.text((x + dx, y + dy), text, font=font, fill=outline_color)
-        # Draw main text
-        draw.text(position, text, font=font, fill=text_color)
+    # Calculate font size and positions for top and bottom text
+    top_font_size, top_positions, top_lines = calculate_text_positions_and_font_size(
+        top_text, img.size, font_path, max_font_size, margin, position="top"
+    )
+    bottom_font_size, bottom_positions, bottom_lines = calculate_text_positions_and_font_size(
+        bottom_text, img.size, font_path, max_font_size, margin, position="bottom"
+    )
 
-    font = ImageFont.truetype(font_path, font_size)
+    top_font = ImageFont.truetype(font_path, top_font_size)
+    bottom_font = ImageFont.truetype(font_path, bottom_font_size)
 
-    first_text, second_text = split_meme_text(text)
-    
     for i in range(img.n_frames):
         img.seek(i)
         frame = img.convert("RGBA")
         frame_copy = frame.copy()
         draw = ImageDraw.Draw(frame_copy)
-        
-        # Draw text with outline
-        draw_text_with_outline(draw, first_text_position, first_text, font, outline_color, text_color, outline_thickness)
-        draw_text_with_outline(draw, second_text_position, second_text, font, outline_color, text_color, outline_thickness)
-        
+
+        # Draw top text with outline
+        for line, position in zip(top_lines, top_positions):
+            draw_text_with_outline(draw, position, line, top_font, outline_color, text_color, outline_thickness)
+
+        # Draw bottom text with outline
+        for line, position in zip(bottom_lines, bottom_positions):
+            draw_text_with_outline(draw, position, line, bottom_font, outline_color, text_color, outline_thickness)
+
         frames.append(frame_copy)
 
-    for i, frame in enumerate(frames):
-        frame.save(f"/gpfs0/bgu-benshimo/users/guyperet/memify/frames/frame_{i:03d}_with_text.png")
-        
-    # Save the modified GIF
-    os.system(f"ffmpeg -y -framerate 14 -i /gpfs0/bgu-benshimo/users/guyperet/memify/frames/frame_%03d_with_text.png {output_gif}")
-
+    # Save frames as GIF
+    frames[0].save(
+        output_gif,
+        save_all=True,
+        append_images=frames[1:],
+        loop=0,
+        duration=img.info.get("duration", 100),
+    )
+    
+    
+# if __name__ == "__main__":
+#     # Example usage
+#     gif_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/gif_outputs_try5/output_gif_2.gif"
+#     meme_text = "What I am trying to do when the freezer get stuck, is basically the opposite of the freezer."
+#     font_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/Avita-Black.otf"
+#     add_clear_text_with_outline_to_gif(gif_path, gif_path, meme_text, font_path)
