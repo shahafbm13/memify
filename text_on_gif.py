@@ -21,6 +21,21 @@ def split_text_into_two_lines(text):
 
     return first_text, second_text
 
+def split_meme_text(text):
+    # Try splitting by a delimiter like a comma first
+    if ',' in text:
+        upper_text, lower_text = text.split(',', 1)
+    # If no comma, split by the first space roughly in the middle
+    else:
+        words = text.split()
+        mid_index = len(words) // 2
+        upper_text = ' '.join(words[:mid_index])
+        lower_text = ' '.join(words[mid_index:])
+
+    # Trim leading/trailing spaces
+    return upper_text.strip(), lower_text.strip()
+
+
 def calculate_text_split_and_position(
     text, 
     image_size, 
@@ -117,9 +132,8 @@ def add_clear_text_with_outline_to_gif(
 
     font = ImageFont.truetype(font_path, font_size)
 
-    # Process each frame
-    first_text, second_text = text.split(',') if ',' in text else text.split(' ', 1)
-
+    first_text, second_text = split_meme_text(text)
+    
     for i in range(img.n_frames):
         img.seek(i)
         frame = img.convert("RGBA")
@@ -132,43 +146,9 @@ def add_clear_text_with_outline_to_gif(
         
         frames.append(frame_copy)
 
-    # Save the new GIF
-    frames[0].save(
-        output_gif,
-        save_all=True,
-        append_images=frames[1:],
-        loop=0,
-        duration=img.info.get('duration', 100),  # Preserve original duration
-        disposal=2  # Ensure transparency is handled properly
-    )
+    for i, frame in enumerate(frames):
+        frame.save(f"/gpfs0/bgu-benshimo/users/guyperet/memify/frames/frame_{i:03d}_with_text.png")
+        
+    # Save the modified GIF
+    os.system(f"ffmpeg -y -framerate 14 -i /gpfs0/bgu-benshimo/users/guyperet/memify/frames/frame_%03d_with_text.png {output_gif}")
 
-# Input GIF file
-input_gif = "/Users/royayalon/Documents/Academy/generative_project/merge_text_gif/input.gif"
-output_gif = "/Users/royayalon/Documents/Academy/generative_project/merge_text_gif/output.gif"
-font_path = "/Users/royayalon/Documents/Academy/generative_project/merge_text_gif/Avita-Black.otf"
-text_long = "wake up. tired. send coffee."
-
-# Load the GIF to get its dimensions
-with Image.open(input_gif) as gif:
-    image_size = gif.size
-
-# Calculate font size and positions
-font_size, first_text_position, second_text_position, first_text, second_text = calculate_text_split_and_position(
-    text_long, image_size, font_path, max_font_size=30, margin=20
-)
-
-# Pass the calculated parameters to the GIF function
-add_clear_text_with_outline_to_gif(
-    input_gif=input_gif,
-    output_gif=output_gif,
-    text=f"{first_text},{second_text}",
-    font_path=font_path,
-    font_size=font_size,
-    first_text_position=first_text_position,
-    second_text_position=second_text_position,
-    outline_color=(0, 0, 0),
-    text_color=(255, 255, 255),
-    outline_thickness=2
-)
-
-print(f"Output GIF saved: {output_gif}")

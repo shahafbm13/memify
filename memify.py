@@ -1,7 +1,7 @@
 from diffusers import StableVideoDiffusionPipeline
 from PIL import Image, ImageDraw, ImageFont
 import torch
-from gensim.models import KeyedVectors
+from sentence_transformers import SentenceTransformer
 import os
 import re
 import numpy as np
@@ -11,67 +11,84 @@ from text_on_gif import *
 from text2vec import *
 from argparse import ArgumentParser
 
-
-hf_token = "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"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+hf_token = "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"
 login(token=hf_token)
 pipe = pipeline("text-generation", model="meta-llama/Llama-3.2-3B-Instruct")
+sentence_encoder = SentenceTransformer('all-MiniLM-L6-v2')
+img2vid = StableVideoDiffusionPipeline.from_pretrained("stabilityai/stable-video-diffusion-img2vid", torch_dtype=torch.float16)
+img2vid = img2vid.to(device)
+img2vid.enable_model_cpu_offload()
 
 def meme_text_generator(user_prompt: str):
     """
     Generate a meme-like text based on the user prompt.
     """
     messages = [
-    {"role": "user", "content": f"Provide a meme-like text for the following description: '{user_prompt}'"},
-    ]
-    response = pipe(messages)
-    return response[0]["generated_text"][1]["content"]
+    {"role": "user", "content": 
+        f"""**Instruction:**
+                You are a creative and witty AI. Please write a short, meme-like text about the subject "{user_prompt}".
+                Keep it concise—one or two sentences only—and make it humorous or engaging in the style of an internet meme.
+
+            **Goal:**
+                Produce a fun, meme-like quip referencing "{user_prompt}".
+                Keep it short and suitable for a wide audience.
+                You may include mild pop-culture references or comedic exaggeration.
+
+            **Format:**
+                One or two sentences maximum.
+                Meme-like or playful tone.
+
+            Begin now.
+            """
+    }]
+    response = pipe(messages, return_full_text=False, truncation=False, max_new_tokens=50)
+    return response[0]["generated_text"]
 
 def meme_template_picker(meme_text: str):
     """
     Pick a meme template based on the meme text.
     """
-    with open("/home/ubuntu/GenAI/meme_text_description.json", "r", encoding="utf-8") as f:
+    with open("/gpfs0/bgu-benshimo/users/guyperet/memify/meme_text_description_file.json", "r", encoding="utf-8") as f:
         meme_data = json.load(f)
         
-    meme_template_path = "/home/ubuntu/GenAI/meme_templates/meme_templates"
-    meme_names = os.listdir(meme_template_path)
-    # Clean meme names in the template folder
-    cleaned_meme_names = [clean_meme_name(name) for name in meme_names]
-    # Filter meme_data to only include memes present in the template folder
-    meme_data = {
-        meme_name: descriptions
-        for meme_name, descriptions in meme_data.items()
-        if clean_meme_name(meme_name) in cleaned_meme_names
-    }
     
-    model_path = "GoogleNews-vectors-negative300.bin"
-    model = KeyedVectors.load_word2vec_format(model_path, binary=True)
-    
-    result = find_best_meme_description(meme_text, meme_data, model)
-    result = result["best_meme_name"].replace(" ", "_") + ".jpg"
-    for i, meme_path in enumerate(meme_names):
-        if result in meme_path:
-            return meme_path
+    result = find_best_meme_description(meme_text, meme_data, sentence_encoder)
+    print(f'Best meme matched with the text is {result["best_meme_path"]} with similarity score of {result["similarity"]}')
+    return result["best_meme_path"]
     
 
-    
-
-
-def download_template(meme_template_name: str):
-    """
-    Download the meme template based on the name.
-    """
-    pass
-
-def gif_generator(meme_template_name: str):
+def gif_generator(meme_template_path: str, index : int):
     """
     Generate a GIF based on the meme template.
     """
-    pass
+    image = Image.open(meme_template_path).convert("RGB") # ? Normalize the image
+    # Generate the video with reduced memory usage
+    with torch.amp.autocast('cuda'):  # Enable automatic mixed precision
+        output = img2vid(
+            image, 
+            num_frames=14,  # Reduce number of frames if needed
+            num_inference_steps=100,  # Reduce number of inference steps
+            height=512,  # Reduce height if needed
+            width=512,  # Reduce width if needed            
+        ).frames
+    for i, frame in enumerate(output[0]):
+        frame.save(f"/gpfs0/bgu-benshimo/users/guyperet/memify/frames/frame_{i:03d}.png")
+        
+        
+
+    # Check what is the last index of the gifs in gif_outputs folder, if empty - start from 0 in the format of "output_gif_000.gif"
+    gif_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/gif_outputs"
+    gif_name = f"output_gif_{index}.gif"
+    # os.system(f"ffmpeg -y -framerate 14 -i /gpfs0/bgu-benshimo/users/guyperet/memify/frames/frame_%03d.png {gif_path}/{gif_name}")
+    output[0][0].save(f"{gif_path}/{gif_name}", save_all=True, append_images=output[0][1:], duration=100, loop=0)
+    # Return full gif_path
+    return f'{gif_path}/{gif_name}'
+    
+    
 
 def text_on_gif(gif_path: str, meme_text: str):
-    output_gif = "/home/ubuntu/GenAI/gif_outputs/with_text.gif"
-    font_path = "/home/ubuntu/GenAI/fonts/Avita-Black.otf"
+    font_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/Avita-Black.otf"
 
     # Load the GIF to get its dimensions
     with Image.open(gif_path) as gif:
@@ -84,8 +101,8 @@ def text_on_gif(gif_path: str, meme_text: str):
 
     # Pass the calculated parameters to the GIF function
     add_clear_text_with_outline_to_gif(
-        input_gif=input_gif,
-        output_gif=output_gif,
+        input_gif=gif_path,
+        output_gif=gif_path,
         text=f"{first_text},{second_text}",
         font_path=font_path,
         font_size=font_size,
@@ -99,26 +116,131 @@ def text_on_gif(gif_path: str, meme_text: str):
     
 
 if __name__ == "__main__":
-    # Seed 
-    torch.manual_seed(42)  # For reproducibility
+    # # Seed 
+    # torch.manual_seed(42)  # For reproducibility
     
-    arg_parser = ArgumentParser()
-    arg_parser.add_argument("-p", "--prompt", type=str, required=True, help="User prompt for meme generation")
-    args = arg_parser.parse_args()
-    user_propmpt = args.prompt
-    # Pass the user propmpt to the meme-text generator
-    meme_text = meme_text_generator(user_propmpt)
-    # Pick a meme template based on usern propmt
-    meme_template_name = meme_template_picker(meme_text)
-    # Download/Get the image based on the name of the meme template
-    print(f'Path: {meme_template_name}')
-    assert 0
-    image = download_template(meme_template_name)
+    # arg_parser = ArgumentParser()
+    # arg_parser.add_argument("-p", "--prompt", type=str, required=True, help="User prompt for meme generation")
+    # args = arg_parser.parse_args()
+    # user_propmpt = args.prompts
     
-    # Animate the meme template
-    gif_path = gif_generator(meme_template_name)
-    
-    # Add meme text to the GIF
-    text_on_gif(gif_path, meme_text)
-    
-    # Read the final output
+    user_prompts = [
+    "Mondays",
+    "Wi-Fi passwords",
+    "coffee addiction",
+    "Zoom calls",
+    "online shopping",
+    "gym memberships",
+    "social media influencers",
+    "cat videos",
+    "morning alarms",
+    "Sunday scaries",
+    "texting typos",
+    "airplane food",
+    "road trips",
+    "office gossip",
+    "self-checkout machines",
+    "weather apps",
+    "password resets",
+    "traffic jams",
+    "holiday sales",
+    "birthday parties",
+    "group chats",
+    "pet selfies",
+    "overpacked luggage",
+    "fast food drive-thrus",
+    "reality TV",
+    "work emails",
+    "long queues",
+    "last-minute plans",
+    "diet fads",
+    "oversized hoodies",
+    "binge-watching",
+    "smartphone battery life",
+    "public Wi-Fi",
+    "celebrity gossip",
+    "cancel culture",
+    "pop quizzes",
+    "weekend plans",
+    "sleeping in",
+    "food delivery apps",
+    "cryptocurrency",
+    "daily horoscopes",
+    "rainy days",
+    "awkward silences",
+    "life hacks",
+    "broken phone screens",
+    "late-night snacks",
+    "houseplants",
+    "morning commutes",
+    "air conditioner remotes",
+    "autocorrect fails",
+    "online dating",
+    "fitness trackers",
+    "wifi signal strength",
+    "socks with sandals",
+    "New Year resolutions",
+    "lazy Sundays",
+    "spilled coffee",
+    "unread emails",
+    "unexpected guests",
+    "forgotten passwords",
+    "selfie sticks",
+    "early morning flights",
+    "caffeine crashes",
+    "holiday gift wrapping",
+    "unwanted notifications",
+    "dancing in the rain",
+    "weekend hangovers",
+    "charging cables",
+    "daily commutes",
+    "overpriced coffee",
+    "phone storage limits",
+    "fast fashion",
+    "budget airlines",
+    "rainbow after the storm",
+    "pizza delivery delays",
+    "sunny beach days",
+    "group photo fails",
+    "misheard song lyrics",
+    "karaoke nights",
+    "ice cream cravings",
+    "rollercoaster rides",
+    "game night arguments",
+    "vacation photos",
+    "procrastination",
+    "travel bucket lists",
+    "birthday surprises",
+    "midnight cravings",
+    "unexpected rain",
+    "street food adventures",
+    "dog walks",
+    "board game nights",
+    "silent phone calls",
+    "clumsy moments",
+    "movie marathons",
+    "morning jogs",
+    "skipping ads",
+    "shopping sprees",
+    "midweek blues"
+    ]
+    for i, user_propmpt in enumerate(user_prompts):
+        # Pass the user propmpt to the meme-text generator
+        meme_text = meme_text_generator(user_propmpt)
+        print(f'Meme text: {meme_text}')
+        # Pick a meme template based on usern propmt
+        meme_template_path = meme_template_picker(meme_text)
+        print(f'Meme template: {meme_template_path}')
+        # Animate the meme template
+        gif_path = gif_generator(meme_template_path, i)
+        print(f'GIF path: {gif_path}')
+        # # Add meme text to the GIF
+        text_on_gif(gif_path, meme_text)
+        print(f'Done with gif #{i}')
+        # Empty the frames folder
+        frames_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/frames"
+        files = os.listdir(frames_path)
+        for file in files:
+            os.remove(f"{frames_path}/{file}")
+        
+    print("Done with all the GIFs")
