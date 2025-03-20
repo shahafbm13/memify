@@ -172,11 +172,3 @@ def add_clear_text_with_outline_to_gif(
         loop=0,
         duration=img.info.get("duration", 100),
     )
-    
-    
-# if __name__ == "__main__":
-#     # Example usage
-#     gif_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/gif_outputs_try5/output_gif_2.gif"
-#     meme_text = "What I am trying to do when the freezer get stuck, is basically the opposite of the freezer."
-#     font_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/Avita-Black.otf"
-#     add_clear_text_with_outline_to_gif(gif_path, gif_path, meme_text, font_path)

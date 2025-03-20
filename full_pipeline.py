@@ -17,11 +17,11 @@ from diffusers import DiffusionPipeline, StableVideoDiffusionPipeline
 # os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 # 1) Configure your Google Generative AI API key
-GENAI_API_KEY = "AIzaSyCP15lhd_MQ108q3j_xSyoyE0s7RmMUx-I"  # e.g. "AIzaSyCP..."
+GENAI_API_KEY = "INSERT_YOUR_API_KEY"  # e.g. "AIzaSyCP..."
 genai.configure(api_key=GENAI_API_KEY)
 
 # 2) Configure your Hugging Face token
-HUGGINGFACE_TOKEN = "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"  # e.g. "hf_abc123..."
+HUGGINGFACE_TOKEN = "INSERT_YOUR_HF_TOKEN"  # e.g. "hf_abc123..."
 login(token=HUGGINGFACE_TOKEN)
 
 # -------------------------------------------------------

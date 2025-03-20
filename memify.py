@@ -12,7 +12,7 @@ from text2vec import *
 from argparse import ArgumentParser
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-hf_token = "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"
+hf_token = "INSERT_YOUR_HF_TOKEN"
 login(token=hf_token)
 pipe = pipeline("text-generation", model="meta-llama/Llama-3.2-3B-Instruct")
 sentence_encoder = SentenceTransformer('all-MiniLM-L6-v2')
@@ -49,7 +49,7 @@ def meme_template_picker(meme_text: str):
     """
     Pick a meme template based on the meme text.
     """
-    with open("/gpfs0/bgu-benshimo/users/guyperet/memify/meme_text_description_file.json", "r", encoding="utf-8") as f:
+    with open("your/path/here", "r", encoding="utf-8") as f:
         meme_data = json.load(f)
         
     
@@ -73,14 +73,13 @@ def gif_generator(meme_template_path: str, index : int):
             width=512,  # Reduce width if needed            
         ).frames
     for i, frame in enumerate(output[0]):
-        frame.save(f"/gpfs0/bgu-benshimo/users/guyperet/memify/frames/frame_{i:03d}.png")
+        frame.save(f"/your/path/here/")
         
         
 
     # Check what is the last index of the gifs in gif_outputs folder, if empty - start from 0 in the format of "output_gif_000.gif"
-    gif_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/gif_outputs"
+    gif_path = "your/path/here"
     gif_name = f"output_gif_{index}.gif"
-    # os.system(f"ffmpeg -y -framerate 14 -i /gpfs0/bgu-benshimo/users/guyperet/memify/frames/frame_%03d.png {gif_path}/{gif_name}")
     output[0][0].save(f"{gif_path}/{gif_name}", save_all=True, append_images=output[0][1:], duration=100, loop=0)
     # Return full gif_path
     return f'{gif_path}/{gif_name}'
@@ -88,7 +87,7 @@ def gif_generator(meme_template_path: str, index : int):
     
 
 def text_on_gif(gif_path: str, meme_text: str):
-    font_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/Avita-Black.otf"
+    font_path = "your/path/here"
     # Pass the calculated parameters to the GIF function
     add_clear_text_with_outline_to_gif(
         input_gif=gif_path,
@@ -222,7 +221,7 @@ if __name__ == "__main__":
         text_on_gif(gif_path, meme_text)
         print(f'Done with gif #{i}')
         # Empty the frames folder
-        frames_path = "/gpfs0/bgu-benshimo/users/guyperet/memify/frames"
+        frames_path = "your/path/here"
         files = os.listdir(frames_path)
         for file in files:
             os.remove(f"{frames_path}/{file}")
